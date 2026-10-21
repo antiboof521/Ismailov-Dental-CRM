@@ -19,6 +19,7 @@ function VisitForm({ onSaved, onCancel }) {
     staff_id: "",
     initial_staff_id: "",
     final_staff_id: "",
+    split_ratio: 50,
     complaint: "",
     diagnosis: "",
     recommendations: "",
@@ -85,12 +86,14 @@ function VisitForm({ onSaved, onCancel }) {
         staff_id: initId,
         initial_staff_id: initId,
         final_staff_id: finId,
+        split_ratio: finId ? Number(form.split_ratio || 50) : 50,
         procedures: items.map((it) => ({
           service_id: it.service_id ? parseInt(it.service_id, 10) : null,
           tooth: it.tooth,
           price: Number(it.price || 0),
           initial_staff_id: initId,
           final_staff_id: finId,
+          split_ratio: finId ? Number(form.split_ratio || 50) : 50,
         })),
       });
 
@@ -106,6 +109,10 @@ function VisitForm({ onSaved, onCancel }) {
       setBusy(false);
     }
   };
+
+  const hasTwoDoctors = Boolean(form.final_staff_id && form.final_staff_id !== (form.initial_staff_id || form.staff_id));
+  const initStaff = staff.find((s) => String(s.id) === String(form.initial_staff_id || form.staff_id));
+  const finStaff = staff.find((s) => String(s.id) === String(form.final_staff_id));
 
   return (
     <form onSubmit={submit}>
@@ -152,6 +159,72 @@ function VisitForm({ onSaved, onCancel }) {
             ))}
           </select>
         </div>
+
+        {/* 2 KISHI BAJARGANDA TAYYOR TUGMALAR BILAN ULUSHNI BO'LISH */}
+        {hasTwoDoctors && (
+          <div style={{ gridColumn: "1 / -1", background: "#f8fafc", border: "1.5px dashed #94a3b8", borderRadius: 10, padding: 14 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 6 }}>
+              <span style={{ fontWeight: 700, fontSize: "0.9rem", color: "#0f172a" }}>
+                👥 2 kishi bajargan ish summasini taqsimlash:
+              </span>
+              <span className="badge blue" style={{ fontWeight: 700 }}>
+                {form.split_ratio || 50}% / {100 - (form.split_ratio || 50)}%
+              </span>
+            </div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+              {[
+                { label: "50% / 50% (Teng 2 ga)", val: 50 },
+                { label: "60% / 40%", val: 60 },
+                { label: "70% / 30%", val: 70 },
+                { label: "80% / 20%", val: 80 },
+              ].map((item) => (
+                <button
+                  key={item.val}
+                  type="button"
+                  className={`btn small ${Number(form.split_ratio) === item.val ? "" : "secondary"}`}
+                  onClick={() => setForm((f) => ({ ...f, split_ratio: item.val }))}
+                  style={{ fontWeight: Number(form.split_ratio) === item.val ? 700 : 500 }}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <span style={{ fontSize: "0.85rem", color: "#475569", fontWeight: 600 }}>Ixtiyoriy ulush (%):</span>
+              <input
+                type="number"
+                min="1"
+                max="99"
+                value={form.split_ratio}
+                onChange={(e) => {
+                  const num = Math.min(99, Math.max(1, Number(e.target.value) || 50));
+                  setForm((f) => ({ ...f, split_ratio: num }));
+                }}
+                style={{ width: 75, textAlign: "center", fontWeight: 700 }}
+              />
+              <span style={{ fontSize: "0.85rem", color: "#64748b" }}>
+                Boshlovchi: <strong>{form.split_ratio || 50}%</strong> | Yordamchi: <strong>{100 - (form.split_ratio || 50)}%</strong>
+              </span>
+            </div>
+            {total > 0 && (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10, background: "#fff", padding: 10, borderRadius: 8, border: "1px solid #e2e8f0" }}>
+                <div>
+                  <div style={{ fontSize: "0.78rem", color: "#64748b" }}>👨‍⚕️ {initStaff?.full_name || "1-shifokor"}:</div>
+                  <div style={{ fontWeight: 700, color: "#16a34a", fontSize: "0.95rem" }}>
+                    {Math.round((total * (form.split_ratio || 50)) / 100).toLocaleString("ru-RU")} so'm ({form.split_ratio || 50}%)
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: "0.78rem", color: "#64748b" }}>🤝 {finStaff?.full_name || "2-shifokor"}:</div>
+                  <div style={{ fontWeight: 700, color: "#2563eb", fontSize: "0.95rem" }}>
+                    {Math.round((total * (100 - (form.split_ratio || 50))) / 100).toLocaleString("ru-RU")} so'm ({100 - (form.split_ratio || 50)}%)
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="form-row">
           <label>{t("appt_complaint")}</label>
           <input value={form.complaint} onChange={set("complaint")} placeholder="Shikoyat..." />

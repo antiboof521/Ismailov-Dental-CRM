@@ -22,6 +22,7 @@ export interface FinanceRow {
   amount: number;
   method?: string;
   patient?: string;
+  doctor?: string;
   comment?: string;
 }
 
@@ -38,6 +39,7 @@ export function finance(txRows: FinanceRow[], from: string, to: string): ExcelJS
     { header: "Summa", key: "amount", width: 14 },
     { header: "To'lov usuli", key: "method", width: 12 },
     { header: "Bemor", key: "patient", width: 28 },
+    { header: "Bajaruvchi (Shifokor)", key: "doctor", width: 26 },
     { header: "Izoh", key: "comment", width: 32 },
   ];
   styleHeader(ws);
@@ -55,6 +57,7 @@ export function finance(txRows: FinanceRow[], from: string, to: string): ExcelJS
       amount: amt,
       method: r.method || "",
       patient: r.patient || "",
+      doctor: r.doctor || "—",
       comment: r.comment || "",
     });
   }

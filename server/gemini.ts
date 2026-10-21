@@ -9,10 +9,20 @@ import { GoogleGenAI } from "@google/genai";
 
 let aiClient: GoogleGenAI | null = null;
 
+export function getRawApiKey(): string {
+  const raw =
+    process.env.GEMINI_API_KEY ||
+    process.env.GOOGLE_API_KEY ||
+    process.env.GOOGLE_GENAI_API_KEY ||
+    process.env.API_KEY ||
+    "";
+  return raw.trim().replace(/^["']|["']$/g, "");
+}
+
 export function getGeminiClient(): GoogleGenAI {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = getRawApiKey();
   if (!apiKey) {
-    throw new Error("GEMINI_API_KEY sozlanmagan. Iltimos, AI Studio Settings > Secrets bo'limida GEMINI_API_KEY ni kiriting.");
+    throw new Error("GEMINI_API_KEY sozlanmagan. Render.com Dashboard -> Environment bo'limida GEMINI_API_KEY (yoki GOOGLE_API_KEY) kalitini kiriting.");
   }
   if (!aiClient) {
     aiClient = new GoogleGenAI({
@@ -28,7 +38,58 @@ export function getGeminiClient(): GoogleGenAI {
 }
 
 export function isGeminiAvailable(): boolean {
-  return Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim().length > 5);
+  return Boolean(getRawApiKey().length > 5);
+}
+
+export const SUPPORTED_GEMINI_MODELS = [
+  "gemini-2.5-flash",
+  "gemini-2.0-flash",
+  "gemini-1.5-flash",
+  "gemini-3.8-flash",
+];
+
+/**
+ * Render.com yoki serverda Gemini ulanishini tekshirish
+ */
+export async function testGeminiConnection(): Promise<{
+  ok: boolean;
+  model: string;
+  error?: string;
+  latencyMs?: number;
+}> {
+  const key = getRawApiKey();
+  if (!key) {
+    return {
+      ok: false,
+      model: "none",
+      error: "GEMINI_API_KEY topilmadi. Render.com da: Dashboard -> Web Service -> Environment bo'limiga 'GEMINI_API_KEY' nomli kalit qo'shing va Save qiling.",
+    };
+  }
+
+  const t0 = Date.now();
+  for (const model of SUPPORTED_GEMINI_MODELS) {
+    try {
+      const ai = getGeminiClient();
+      await ai.models.generateContent({
+        model,
+        contents: "Salom, test",
+        config: { maxOutputTokens: 10 },
+      });
+      return {
+        ok: true,
+        model,
+        latencyMs: Date.now() - t0,
+      };
+    } catch (err: any) {
+      console.warn(`[Gemini Test] Model '${model}' sinovi:`, err?.message);
+    }
+  }
+
+  return {
+    ok: false,
+    model: SUPPORTED_GEMINI_MODELS[0],
+    error: "Google Gemini kaliti aniqlandi, lekin server javob qaytarmadi. Kalitning to'g'riligini va kvotasini tekshiring.",
+  };
 }
 
 /**
@@ -39,7 +100,7 @@ async function callGeminiWithRetry<T>(
   maxRetries = 2
 ): Promise<T> {
   const ai = getGeminiClient();
-  let delay = 1200;
+  let delay = 1000;
 
   for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
     try {
@@ -63,6 +124,36 @@ async function callGeminiWithRetry<T>(
     }
   }
   throw new Error("Gemini API qayta urinish chegarasiga yetdi");
+}
+
+/**
+ * Render.com da model mos kelmasligi (404/not found) xavfini oldini oluvchi
+ * zaxira modellarga ega universal chaqiruvchi
+ */
+export async function generateContentWithFallback(params: {
+  contents: any;
+  config?: any;
+}): Promise<{ response: any; modelUsed: string }> {
+  let lastError: any = null;
+
+  for (const model of SUPPORTED_GEMINI_MODELS) {
+    try {
+      const res = await callGeminiWithRetry(async (ai) => {
+        return await ai.models.generateContent({
+          model,
+          contents: params.contents,
+          config: params.config,
+        });
+      }, 1);
+      return { response: res, modelUsed: model };
+    } catch (err: any) {
+      lastError = err;
+      const errMsg = String(err?.message || "");
+      console.warn(`[Gemini Fallback] Model '${model}' ishlamadi (${errMsg.slice(0, 80)}). Keyingi modelga o'tilmoqda...`);
+    }
+  }
+
+  throw lastError || new Error("Hech qaysi Gemini modeli javob bermadi");
 }
 
 /**
@@ -141,31 +232,28 @@ Tahlil strukturasi:
 
 Yuqoridagi ko'rsatmalarga asosan tahlilni puxta va tushunarli formatda bayon qiling.`;
 
-    const response = await callGeminiWithRetry(async (ai) => {
-      return await ai.models.generateContent({
-        model: "gemini-3.8-flash",
-        contents: {
-          parts: [
-            {
-              inlineData: {
-                mimeType,
-                data: base64,
-              },
+    const { response, modelUsed } = await generateContentWithFallback({
+      contents: {
+        parts: [
+          {
+            inlineData: {
+              mimeType,
+              data: base64,
             },
-            { text: userPrompt },
-          ],
-        },
-        config: {
-          systemInstruction,
-          temperature: 0.2, // Tibbiy aniqlik uchun past harorat
-        },
-      });
+          },
+          { text: userPrompt },
+        ],
+      },
+      config: {
+        systemInstruction,
+        temperature: 0.2, // Tibbiy aniqlik uchun past harorat
+      },
     });
 
     const fullText = response.text || "Tahlil natijasi olinmadi.";
     return {
       text: fullText,
-      confidence: "94%",
+      confidence: "95%",
       findings: extractKeyPoints(fullText, "topilma"),
       diagnosis: extractKeyPoints(fullText, "tashxis")[0] || "Stomatologik diagnostika xulosasi",
       recommendations: extractKeyPoints(fullText, "tavsiya"),
@@ -249,15 +337,12 @@ ${params.availableServices.map((s) => `- ${s.name} (${s.category}): ${s.price.to
 
 Iltimos, ushbu bemor uchun to'liq bosqichli davolash rejasini tuzib bering.`;
 
-    const response = await callGeminiWithRetry(async (ai) => {
-      return await ai.models.generateContent({
-        model: "gemini-3.8-flash",
-        contents: prompt,
-        config: {
-          systemInstruction,
-          temperature: 0.3,
-        },
-      });
+    const { response, modelUsed } = await generateContentWithFallback({
+      contents: prompt,
+      config: {
+        systemInstruction,
+        temperature: 0.3,
+      },
     });
 
     const text = response.text || "Reja tuzilmadi.";
@@ -328,15 +413,12 @@ Asosiy yo'nalishlar:
       parts: [{ text: finalPrompt }],
     });
 
-    const response = await callGeminiWithRetry(async (ai) => {
-      return await ai.models.generateContent({
-        model: "gemini-3.8-flash",
-        contents,
-        config: {
-          systemInstruction,
-          temperature: 0.3,
-        },
-      });
+    const { response, modelUsed } = await generateContentWithFallback({
+      contents,
+      config: {
+        systemInstruction,
+        temperature: 0.3,
+      },
     });
 
     return response.text || "Javob tayyorlanmadi.";

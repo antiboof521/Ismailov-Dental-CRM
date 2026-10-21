@@ -154,6 +154,7 @@ export interface Procedure {
   initial_staff_name?: string;
   final_staff_id?: number | null;
   final_staff_name?: string;
+  split_ratio?: number; // Boshlovchi shifokor ulushi (%) masalan: 50 (50/50), 60 (60/40), 70 (70/30)
   procedure_date: string;
 }
 
@@ -165,6 +166,8 @@ export interface Transaction {
   method: "cash" | "card" | "transfer";
   patient_id: number | null;
   patient_name?: string;
+  staff_id?: number | null;
+  staff_name?: string;
   comment: string;
   tx_date: string;
 }
@@ -179,6 +182,7 @@ export interface Visit {
   initial_staff_name?: string;
   final_staff_id?: number | null;
   final_staff_name?: string;
+  split_ratio?: number;
   complaint: string;
   diagnosis: string;
   recommendations: string;
@@ -738,7 +742,7 @@ class StorageEngine {
       ...p,
       id,
       connect_code: p.connect_code || this.generateUniqueConnectCode(),
-      created_at: p.created_at || dayjs().format("YYYY-MM-DD HH:mm"),
+      created_at: p.created_at || dayjs().utcOffset(5).format("YYYY-MM-DD HH:mm"),
       is_viewed: p.is_viewed !== undefined ? p.is_viewed : false,
     };
     this.data.patients.unshift(newPatient);
@@ -750,7 +754,7 @@ class StorageEngine {
     const p = this.data.patients.find((x) => x.id === id);
     if (!p) return null;
     p.is_viewed = true;
-    p.viewed_at = dayjs().format("YYYY-MM-DD HH:mm");
+    p.viewed_at = dayjs().utcOffset(5).format("YYYY-MM-DD HH:mm");
     this.save();
     return p;
   }

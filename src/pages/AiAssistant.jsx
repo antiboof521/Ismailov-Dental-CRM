@@ -8,7 +8,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { api } from "../api.js";
 import { useLang } from "../i18n.jsx";
-import { ErrorBanner } from "../components/ui.jsx";
+import { ErrorBanner, Modal } from "../components/ui.jsx";
 
 export default function AiAssistant({ initialPatientId = null, initialImage = null }) {
   const { t, lang } = useLang();
@@ -50,6 +50,33 @@ export default function AiAssistant({ initialPatientId = null, initialImage = nu
   const chatBottomRef = useRef(null);
 
   const [error, setError] = useState("");
+  const [aiStatus, setAiStatus] = useState({ hasApiKey: true, checked: false });
+  const [testingAi, setTestingAi] = useState(false);
+  const [testResult, setTestResult] = useState(null);
+  const [showRenderGuide, setShowRenderGuide] = useState(false);
+
+  // Gemini holatini tekshirish
+  useEffect(() => {
+    api.get("/api/ai/status")
+      .then((d) => setAiStatus({ hasApiKey: Boolean(d.hasApiKey), checked: true }))
+      .catch(() => setAiStatus({ hasApiKey: false, checked: true }));
+  }, []);
+
+  const runAiTest = async () => {
+    setTestingAi(true);
+    setTestResult(null);
+    try {
+      const res = await api.get("/api/ai/test");
+      setTestResult(res);
+      if (res.ok) {
+        setAiStatus({ hasApiKey: true, checked: true });
+      }
+    } catch (e) {
+      setTestResult({ ok: false, error: e.message || "Test xatolik bilan tugadi" });
+    } finally {
+      setTestingAi(false);
+    }
+  };
 
   // Bemorlar ro'yxatini yuklash
   useEffect(() => {
@@ -220,11 +247,95 @@ export default function AiAssistant({ initialPatientId = null, initialImage = nu
             {t("ai_subtitle")}
           </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#f0fdf4", border: "1px solid #bbf7d0", padding: "6px 14px", borderRadius: 20 }}>
-          <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#22c55e", display: "inline-block" }} />
-          <span style={{ fontSize: "0.85rem", fontWeight: "bold", color: "#166534" }}>Gemini 3.8 Flash • Online</span>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <button
+            type="button"
+            className="btn small secondary"
+            disabled={testingAi}
+            onClick={runAiTest}
+            title="Render.com va Google Gemini o'rtasidagi aloqani sinab ko'rish"
+            style={{ fontSize: "0.82rem", display: "inline-flex", alignItems: "center", gap: 6 }}
+          >
+            <span>{testingAi ? "⏳" : "⚡"}</span>
+            <span>{testingAi ? "Sinov..." : "Aloqani tekshirish"}</span>
+          </button>
+
+          <button
+            type="button"
+            className="btn small secondary"
+            onClick={() => setShowRenderGuide(true)}
+            style={{ fontSize: "0.82rem", color: "#2563eb", borderColor: "#bfdbfe" }}
+            title="Render.com da GEMINI_API_KEY sozlash bo'yicha ko'rsatma"
+          >
+            ⚙️ Render.com sozlash
+          </button>
+
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              background: aiStatus.hasApiKey ? "#f0fdf4" : "#fff7ed",
+              border: `1px solid ${aiStatus.hasApiKey ? "#bbf7d0" : "#fdba74"}`,
+              padding: "6px 14px",
+              borderRadius: 20,
+            }}
+          >
+            <span
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: "50%",
+                background: aiStatus.hasApiKey ? "#22c55e" : "#f97316",
+                display: "inline-block",
+              }}
+            />
+            <span
+              style={{
+                fontSize: "0.85rem",
+                fontWeight: "bold",
+                color: aiStatus.hasApiKey ? "#166534" : "#9a3412",
+              }}
+            >
+              {aiStatus.hasApiKey ? "Gemini AI • Faol" : "GEMINI_API_KEY kutilmoqda"}
+            </span>
+          </div>
         </div>
       </div>
+
+      {testResult && (
+        <div
+          style={{
+            padding: "10px 14px",
+            borderRadius: 8,
+            marginBottom: 14,
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: 8,
+            background: testResult.ok ? "#ecfdf5" : "#fef2f2",
+            border: `1px solid ${testResult.ok ? "#6ee7b7" : "#fca5a5"}`,
+            color: testResult.ok ? "#065f46" : "#991b1b",
+          }}
+        >
+          <div>
+            <strong>{testResult.ok ? "✓ Gemini aloqasi muvaffaqiyatli:" : "⚠️ Gemini xatoligi:"}</strong>{" "}
+            {testResult.ok
+              ? `Faol model: ${testResult.model} • Javob vaqti: ${testResult.latencyMs}ms`
+              : testResult.error}
+          </div>
+          <button
+            type="button"
+            className="btn small secondary"
+            onClick={() => setTestResult(null)}
+            style={{ padding: "2px 8px", fontSize: "0.75rem" }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {error && <ErrorBanner message={error} onClose={() => setError("")} />}
 
@@ -859,6 +970,69 @@ export default function AiAssistant({ initialPatientId = null, initialImage = nu
             </form>
           </div>
         </div>
+      )}
+
+      {showRenderGuide && (
+        <Modal title="⚙️ Render.com da Gemini AI-ni sozlash qo'llanmasi" onClose={() => setShowRenderGuide(false)}>
+          <div style={{ lineHeight: 1.6, fontSize: "0.92rem", color: "#334155" }}>
+            <p style={{ margin: "0 0 12px" }}>
+              Agar tizimingizni <strong>render.com</strong> serverida ishlatayotgan bo'lsangiz, Gemini AI to'g'ri ishlashi uchun Render muhitiga Google API kalitini kiritish zarur.
+            </p>
+
+            <div style={{ background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: 8, padding: 14, marginBottom: 14 }}>
+              <h4 style={{ margin: "0 0 8px", color: "#0f172a" }}>Bosqichma-bosqich ko'rsatma:</h4>
+              <ol style={{ margin: "0 0 8px", paddingLeft: 20 }}>
+                <li style={{ marginBottom: 6 }}>
+                  <strong>Render.com Dashboard</strong> ga kiring:{" "}
+                  <a href="https://dashboard.render.com" target="_blank" rel="noopener noreferrer" style={{ color: "#2563eb", textDecoration: "underline" }}>
+                    dashboard.render.com
+                  </a>
+                </li>
+                <li style={{ marginBottom: 6 }}>
+                  O'zingizning stomatologiya Web Service loyihangizni tanlang.
+                </li>
+                <li style={{ marginBottom: 6 }}>
+                  Chap menyudan <strong>"Environment"</strong> (Muhit o'zgaruvchilari) bo'limiga o'ting.
+                </li>
+                <li style={{ marginBottom: 6 }}>
+                  <strong>"Add Environment Variable"</strong> tugmasini bosing:
+                  <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 6, padding: "8px 12px", marginTop: 4, fontFamily: "monospace", fontSize: "0.85rem" }}>
+                    <strong>Key:</strong> GEMINI_API_KEY<br />
+                    <strong>Value:</strong> &lt;Sizning Google AI Studio kalitingiz (masalan AIzaSy...)&gt;
+                  </div>
+                </li>
+                <li style={{ marginBottom: 6 }}>
+                  <strong>"Save Changes"</strong> tugmasini bosing.
+                </li>
+              </ol>
+              <div style={{ fontSize: "0.85rem", color: "#059669", fontWeight: 600 }}>
+                💡 Saqlaganingizdan so'ng Render.com avtomatik ravishda ilovani qayta ishga tushiradi (1-2 daqiqada yangilanadi) va yuqoridagi <strong>"Aloqani tekshirish"</strong> tugmasi orqali tekshirishingiz mumkin.
+              </div>
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <a
+                href="https://aistudio.google.com/app/apikey"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn small secondary"
+                style={{ textDecoration: "none" }}
+              >
+                🔑 Google AI Studio dan bepul kalit olish
+              </a>
+              <button
+                type="button"
+                className="btn small"
+                onClick={() => {
+                  setShowRenderGuide(false);
+                  runAiTest();
+                }}
+              >
+                Tushundim, aloqani sinash
+              </button>
+            </div>
+          </div>
+        </Modal>
       )}
     </div>
   );

@@ -13,12 +13,14 @@ const EXPENSE_CATEGORIES = ["material", "rent", "salary", "utility", "equipment"
 function TxModal({ initial, defaultType = "income", onSaved, onCancel }) {
   const { t } = useLang();
   const [patients, setPatients] = useState([]);
+  const [staff, setStaff] = useState([]);
   const [form, setForm] = useState({
     type: initial?.type || defaultType,
     amount: initial?.amount || "",
     category: initial?.category || (defaultType === "income" ? "payment" : "material"),
     method: initial?.method || "cash",
     patient_id: initial?.patient_id || "",
+    staff_id: initial?.staff_id || "",
     comment: initial?.comment || "",
     tx_date: initial?.tx_date || dayjs().format("YYYY-MM-DD"),
   });
@@ -27,6 +29,7 @@ function TxModal({ initial, defaultType = "income", onSaved, onCancel }) {
 
   useEffect(() => {
     api.get("/api/patients?limit=200").then((d) => setPatients(d.patients || [])).catch(() => {});
+    api.get("/api/staff").then((d) => setStaff(d.staff || [])).catch(() => {});
   }, []);
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -40,10 +43,13 @@ function TxModal({ initial, defaultType = "income", onSaved, onCancel }) {
     setBusy(true);
     setError("");
     try {
+      const selStaff = staff.find((s) => String(s.id) === String(form.staff_id));
       const payload = {
         ...form,
         amount: Number(form.amount),
         patient_id: form.patient_id ? parseInt(form.patient_id, 10) : null,
+        staff_id: form.staff_id ? parseInt(form.staff_id, 10) : null,
+        staff_name: selStaff ? selStaff.full_name : undefined,
       };
 
       if (initial && initial.id) {
@@ -140,6 +146,20 @@ function TxModal({ initial, defaultType = "income", onSaved, onCancel }) {
                 {EXPENSE_CATEGORIES.map((c) => (
                   <option key={c} value={c}>
                     {t(`cat_${c}`) || c}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {isIncome && (
+            <div className="form-row">
+              <label>👨‍⚕️ Bajaruvchi shifokor</label>
+              <select value={form.staff_id} onChange={set("staff_id")}>
+                <option value="">— Shifokor (ixtiyoriy) —</option>
+                {staff.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.full_name} ({s.position === "doctor" ? "Shifokor" : s.position})
                   </option>
                 ))}
               </select>
@@ -405,6 +425,7 @@ export default function Finance() {
                 <th>{t("fin_category")}</th>
                 <th>{t("visit_price")}</th>
                 <th>{t("appt_patient")}</th>
+                <th>👨‍⚕️ Bajaruvchi</th>
                 <th>{t("fin_method")}</th>
                 <th>{t("fin_comment")}</th>
                 <th>{t("actions")}</th>
@@ -438,6 +459,9 @@ export default function Finance() {
                     {r.type === "income" ? "+" : "-"}{fmtMoney(r.amount)} {t("sum")}
                   </td>
                   <td>{r.patient_name || "—"}</td>
+                  <td style={{ fontSize: "0.85rem", fontWeight: 600, color: "#1e293b" }}>
+                    {r.staff_name ? `👨‍⚕️ ${r.staff_name}` : "—"}
+                  </td>
                   <td>
                     {r.method === "cash"
                       ? `💵 ${t("fin_cash")}`

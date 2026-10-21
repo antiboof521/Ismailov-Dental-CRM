@@ -11,6 +11,49 @@ import DentalChart from "../components/DentalChart.jsx";
 import DentalGallery from "../components/DentalGallery.jsx";
 import AddressInput from "../components/AddressInput.jsx";
 
+/**
+ * Bemor ro'yxatdan o'tgan vaqtini UTC+5 (O'zbekiston / Toshkent) vaqtiga o'girish
+ * Eski UTC 0 yozuvlariga +5 soat qo'shadi, +05 offseti borlarini o'zgartirmaydi
+ */
+export function formatPatientRegTime(dateStr) {
+  if (!dateStr) return { date: "—", time: "" };
+  try {
+    const str = String(dateStr).trim();
+    if (str.includes("+05") || str.includes("+05:00")) {
+      const d = dayjs(str);
+      return {
+        date: d.format("YYYY-MM-DD"),
+        time: d.format("HH:mm"),
+      };
+    }
+    if (str.endsWith("Z")) {
+      const d = dayjs(str).add(5, "hour");
+      return {
+        date: d.format("YYYY-MM-DD"),
+        time: d.format("HH:mm"),
+      };
+    }
+    // "YYYY-MM-DD HH:mm" yoki "YYYY-MM-DDTHH:mm" UTC 0 da saqlangan
+    if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/.test(str)) {
+      const normalized = str.replace(" ", "T");
+      const d = dayjs(normalized + "Z").add(5, "hour");
+      if (d.isValid()) {
+        return {
+          date: d.format("YYYY-MM-DD"),
+          time: d.format("HH:mm"),
+        };
+      }
+    }
+    const d = dayjs(str);
+    return {
+      date: d.isValid() ? d.format("YYYY-MM-DD") : str.slice(0, 10),
+      time: d.isValid() ? d.format("HH:mm") : "",
+    };
+  } catch (e) {
+    return { date: String(dateStr).slice(0, 10), time: "" };
+  }
+}
+
 function PatientForm({ initial, onSaved, onCancel }) {
   const { t } = useLang();
   const [form, setForm] = useState(initial || { full_name: "", phone: "", birth_date: "", gender: "", address: "", allergies: "", notes: "" });
@@ -90,6 +133,7 @@ function ProcedureFormModal({ patientId, initial, staffList = [], servicesList =
     staff_name: initial?.staff_name || "",
     initial_staff_id: initial?.initial_staff_id || initial?.staff_id || "",
     final_staff_id: initial?.final_staff_id || "",
+    split_ratio: initial?.split_ratio !== undefined ? initial.split_ratio : 50,
     procedure_date: initial?.procedure_date ? initial.procedure_date.slice(0, 10) : dayjs().format("YYYY-MM-DD"),
   });
   const [error, setError] = useState("");
@@ -134,6 +178,7 @@ function ProcedureFormModal({ patientId, initial, staffList = [], servicesList =
         initial_staff_name: initStaff ? initStaff.full_name : "",
         final_staff_id: finStaff ? finStaff.id : null,
         final_staff_name: finStaff ? finStaff.full_name : "",
+        split_ratio: finStaff ? Number(form.split_ratio || 50) : 50,
         procedure_date: form.procedure_date,
       };
 
@@ -149,6 +194,11 @@ function ProcedureFormModal({ patientId, initial, staffList = [], servicesList =
       setBusy(false);
     }
   };
+
+  const initStaff = staffList.find((s) => String(s.id) === String(form.initial_staff_id || form.staff_id));
+  const finStaff = staffList.find((s) => String(s.id) === String(form.final_staff_id));
+  const hasTwoDoctors = Boolean(form.final_staff_id && form.final_staff_id !== (form.initial_staff_id || form.staff_id));
+  const numericPrice = Number(String(form.price).replace(/[^\d.]/g, "") || 0);
 
   return (
     <Modal title={initial ? "✏️ Muolajani tahrirlash" : "📋 + Yangi muolaja (ish) qo'shish"} onClose={onCancel}>
@@ -231,6 +281,72 @@ function ProcedureFormModal({ patientId, initial, staffList = [], servicesList =
               ))}
             </select>
           </div>
+
+          {/* 2 KISHI BAJARGANDA TAYYOR TUGMALAR BILAN ULUSHNI BO'LISH */}
+          {hasTwoDoctors && (
+            <div style={{ gridColumn: "1 / -1", background: "#f8fafc", border: "1.5px dashed #94a3b8", borderRadius: 10, padding: 14 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 6 }}>
+                <span style={{ fontWeight: 700, fontSize: "0.9rem", color: "#0f172a" }}>
+                  👥 2 kishi bajargan ish summasini taqsimlash:
+                </span>
+                <span className="badge blue" style={{ fontWeight: 700 }}>
+                  {form.split_ratio || 50}% / {100 - (form.split_ratio || 50)}%
+                </span>
+              </div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+                {[
+                  { label: "50% / 50% (Teng 2 ga)", val: 50 },
+                  { label: "60% / 40%", val: 60 },
+                  { label: "70% / 30%", val: 70 },
+                  { label: "80% / 20%", val: 80 },
+                ].map((item) => (
+                  <button
+                    key={item.val}
+                    type="button"
+                    className={`btn small ${Number(form.split_ratio) === item.val ? "" : "secondary"}`}
+                    onClick={() => setForm((f) => ({ ...f, split_ratio: item.val }))}
+                    style={{ fontWeight: Number(form.split_ratio) === item.val ? 700 : 500 }}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <span style={{ fontSize: "0.85rem", color: "#475569", fontWeight: 600 }}>Ixtiyoriy ulush (%):</span>
+                <input
+                  type="number"
+                  min="1"
+                  max="99"
+                  value={form.split_ratio}
+                  onChange={(e) => {
+                    const num = Math.min(99, Math.max(1, Number(e.target.value) || 50));
+                    setForm((f) => ({ ...f, split_ratio: num }));
+                  }}
+                  style={{ width: 75, textAlign: "center", fontWeight: 700 }}
+                />
+                <span style={{ fontSize: "0.85rem", color: "#64748b" }}>
+                  Boshlovchi: <strong>{form.split_ratio || 50}%</strong> | Yordamchi: <strong>{100 - (form.split_ratio || 50)}%</strong>
+                </span>
+              </div>
+              {numericPrice > 0 && (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10, background: "#fff", padding: 10, borderRadius: 8, border: "1px solid #e2e8f0" }}>
+                  <div>
+                    <div style={{ fontSize: "0.78rem", color: "#64748b" }}>👨‍⚕️ {initStaff?.full_name || "1-shifokor"}:</div>
+                    <div style={{ fontWeight: 700, color: "#16a34a", fontSize: "0.95rem" }}>
+                      {Math.round((numericPrice * (form.split_ratio || 50)) / 100).toLocaleString("ru-RU")} so'm ({form.split_ratio || 50}%)
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: "0.78rem", color: "#64748b" }}>🤝 {finStaff?.full_name || "2-shifokor"}:</div>
+                    <div style={{ fontWeight: 700, color: "#2563eb", fontSize: "0.95rem" }}>
+                      {Math.round((numericPrice * (100 - (form.split_ratio || 50))) / 100).toLocaleString("ru-RU")} so'm ({100 - (form.split_ratio || 50)}%)
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="form-row">
             <label>Sana *</label>
             <input
@@ -250,18 +366,26 @@ function ProcedureFormModal({ patientId, initial, staffList = [], servicesList =
   );
 }
 
-function PaymentFormModal({ patientId, patientName, initial, defaultDebt = 0, onSaved, onCancel }) {
+function PaymentFormModal({ patientId, patientName, initial, defaultDebt = 0, staffList = [], onSaved, onCancel }) {
   const { t } = useLang();
+  const [internalStaff, setInternalStaff] = useState(staffList);
   const [form, setForm] = useState({
     type: initial?.type || "income",
     amount: initial?.amount || (defaultDebt > 0 ? String(defaultDebt) : ""),
     method: initial?.method || "cash",
     category: initial?.category || "payment",
+    staff_id: initial?.staff_id || "",
     comment: initial?.comment || "",
     tx_date: initial?.tx_date || dayjs().format("YYYY-MM-DD"),
   });
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!internalStaff || internalStaff.length === 0) {
+      api.get("/api/staff").then((d) => setInternalStaff(d.staff || [])).catch(() => {});
+    }
+  }, []);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -273,6 +397,7 @@ function PaymentFormModal({ patientId, patientName, initial, defaultDebt = 0, on
     setBusy(true);
     setError("");
     try {
+      const selStaff = internalStaff.find((s) => String(s.id) === String(form.staff_id));
       const payload = {
         type: form.type,
         amount: cleanAmount,
@@ -280,6 +405,8 @@ function PaymentFormModal({ patientId, patientName, initial, defaultDebt = 0, on
         category: form.category,
         patient_id: patientId,
         patient_name: patientName,
+        staff_id: form.staff_id ? parseInt(form.staff_id, 10) : null,
+        staff_name: selStaff ? selStaff.full_name : undefined,
         comment: form.comment.trim() || (form.type === "income" ? "Bemor to'lovi" : "To'lov qaytarish"),
         tx_date: form.tx_date,
       };
@@ -354,6 +481,17 @@ function PaymentFormModal({ patientId, patientName, initial, defaultDebt = 0, on
                 </button>
               )}
             </div>
+          </div>
+          <div className="form-row">
+            <label>👨‍⚕️ Ishni bajargan shifokor</label>
+            <select value={form.staff_id || ""} onChange={(e) => setForm((f) => ({ ...f, staff_id: e.target.value }))}>
+              <option value="">— Shifokorni tanlang (ixtiyoriy) —</option>
+              {internalStaff.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.full_name} ({s.position === "doctor" ? "Shifokor" : s.position})
+                </option>
+              ))}
+            </select>
           </div>
           <div className="form-row">
             <label>To'lov usuli *</label>
@@ -748,6 +886,7 @@ export function PatientCard({ patient, onClose, initialTab = "chart" }) {
                       <th>{t("fin_income")}/{t("fin_expense")}</th>
                       <th>To'lov usuli</th>
                       <th>{t("visit_price")}</th>
+                      <th>👨‍⚕️ Bajaruvchi</th>
                       <th>{t("fin_comment")}</th>
                       <th>{t("actions")}</th>
                     </tr>
@@ -768,6 +907,9 @@ export function PatientCard({ patient, onClose, initialTab = "chart" }) {
                         </td>
                         <td style={{ fontWeight: 700, color: tr.type === "income" ? "#16a34a" : "#dc2626" }}>
                           {tr.type === "income" ? "+" : "-"}{fmtMoney(tr.amount)} {t("sum")}
+                        </td>
+                        <td style={{ fontSize: "0.85rem", fontWeight: 600, color: "#1e293b" }}>
+                          {tr.staff_name ? `👨‍⚕️ ${tr.staff_name}` : "—"}
                         </td>
                         <td style={{ maxWidth: 180, fontSize: "0.85rem", color: "#334155" }}>
                           {tr.comment || "—"}
@@ -851,6 +993,7 @@ export function PatientCard({ patient, onClose, initialTab = "chart" }) {
               patientName={patient.full_name}
               initial={paymentModal === "new" ? null : paymentModal}
               defaultDebt={data?.balance?.debt || 0}
+              staffList={staffList}
               onSaved={() => {
                 setPaymentModal(null);
                 setSavedMsg("To'lov muvaffaqiyatli saqlandi!");
@@ -1578,12 +1721,19 @@ export default function Patients() {
                     </td>
                     <td>
                       <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                        <span style={{ fontWeight: 600, color: "#1e293b", fontSize: "0.85rem" }}>
-                          📅 {p.created_at ? dayjs(p.created_at).format("YYYY-MM-DD") : "—"}
-                        </span>
-                        <span style={{ fontSize: "0.78rem", color: "#64748b", fontWeight: 500 }}>
-                          🕒 {p.created_at ? dayjs(p.created_at).format("HH:mm") : ""}
-                        </span>
+                        {(() => {
+                          const reg = formatPatientRegTime(p.created_at);
+                          return (
+                            <>
+                              <span style={{ fontWeight: 600, color: "#1e293b", fontSize: "0.85rem" }}>
+                                📅 {reg.date}
+                              </span>
+                              <span style={{ fontSize: "0.78rem", color: "#64748b", fontWeight: 500 }}>
+                                🕒 {reg.time ? `${reg.time} (UTC+5)` : ""}
+                              </span>
+                            </>
+                          );
+                        })()}
                       </div>
                     </td>
                     <td>

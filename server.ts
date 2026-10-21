@@ -1,3 +1,4 @@
+import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import path from "path";
@@ -29,6 +30,8 @@ import {
   generateDentalTreatmentPlan,
   consultDentalCopilot,
   isGeminiAvailable,
+  testGeminiConnection,
+  getRawApiKey,
 } from "./server/gemini.js";
 import { adminAuth } from "./src/lib/firebase-admin.ts";
 import { getOrCreateUser } from "./src/db/users.ts";
@@ -558,7 +561,7 @@ app.post("/api/patients/:id/images", (req, res) => {
     url: body.url || body.after_url || body.before_url,
     before_url: body.before_url,
     after_url: body.after_url,
-    created_at: dayjs().format("YYYY-MM-DD HH:mm"),
+    created_at: dayjs().utcOffset(5).format("YYYY-MM-DD HH:mm"),
     doctor_name: body.doctor_name || "Shifokor",
   };
 
@@ -577,11 +580,24 @@ app.delete("/api/patients/:id/images/:imageId", (req, res) => {
 
 // ── GEMINI AI ENDPOINTS ──
 app.get("/api/ai/status", (req, res) => {
+  const hasKey = isGeminiAvailable();
   res.json({
     available: true,
-    hasApiKey: isGeminiAvailable(),
+    hasApiKey: hasKey,
     model: "gemini-3.8-flash",
+    hint: hasKey
+      ? "Gemini API kaliti aniqlangan"
+      : "Render.com Dashboard -> Environment bo'limida 'GEMINI_API_KEY' kaliti kiritilishi kerak.",
   });
+});
+
+app.all("/api/ai/test", async (req, res) => {
+  try {
+    const testRes = await testGeminiConnection();
+    res.json(testRes);
+  } catch (err: any) {
+    res.status(500).json({ ok: false, error: err.message || "Gemini sinovida xatolik" });
+  }
 });
 
 app.post("/api/ai/analyze-radiograph", async (req, res) => {
@@ -657,7 +673,7 @@ app.post("/api/patients", (req, res) => {
     notes: body.notes || "",
     source: body.source || "clinic",
     telegram_id: body.telegram_id,
-    created_at: dayjs().format("YYYY-MM-DD HH:mm"),
+    created_at: dayjs().utcOffset(5).format("YYYY-MM-DD HH:mm"),
     is_viewed: false,
   });
   broadcastSSE("patient:new", { id: newP.id, name: newP.full_name, phone: newP.phone });
@@ -1009,6 +1025,32 @@ app.delete("/api/visits/:id", (req, res) => {
 });
 
 // Procedures CRUD
+app.get("/api/procedures", (req, res) => {
+  let list = storage.getProcedures();
+  if (req.query.from && req.query.to) {
+    const from = String(req.query.from);
+    const to = String(req.query.to);
+    list = list.filter((p) => p.procedure_date >= from && p.procedure_date <= to);
+  }
+  if (req.query.patient_id) {
+    const pid = parseInt(String(req.query.patient_id), 10);
+    list = list.filter((p) => p.patient_id === pid);
+  }
+  if (req.query.staff_id) {
+    const sid = parseInt(String(req.query.staff_id), 10);
+    list = list.filter((p) => p.staff_id === sid || p.initial_staff_id === sid || p.final_staff_id === sid);
+  }
+  const patients = storage.getPatients();
+  const enriched = list.map((p) => {
+    const pat = patients.find((pt) => pt.id === p.patient_id);
+    return {
+      ...p,
+      patient_name: pat ? pat.full_name : "Bemor",
+    };
+  });
+  res.json({ procedures: enriched });
+});
+
 app.post("/api/procedures", (req, res) => {
   const b = req.body;
   if (!b.patient_id) return res.status(400).json({ error: "Bemor ID talab qilinadi" });
@@ -1029,6 +1071,7 @@ app.post("/api/procedures", (req, res) => {
     initial_staff_name: initStaff ? initStaff.full_name : (staff ? staff.full_name : ""),
     final_staff_id: finStaff ? finStaff.id : null,
     final_staff_name: finStaff ? finStaff.full_name : "",
+    split_ratio: b.split_ratio !== undefined ? Number(b.split_ratio) : 50,
     procedure_date: b.procedure_date || dayjs().format("YYYY-MM-DD"),
   });
 
@@ -1059,6 +1102,7 @@ app.put("/api/procedures/:id", (req, res) => {
     const fs = storage.getStaff().find((s) => s.id === patch.final_staff_id);
     patch.final_staff_name = fs ? fs.full_name : "";
   }
+  if (b.split_ratio !== undefined) patch.split_ratio = Number(b.split_ratio);
   if (b.procedure_date !== undefined) patch.procedure_date = b.procedure_date;
 
   const updated = storage.updateProcedure(id, patch);
@@ -1205,21 +1249,74 @@ app.get("/api/transactions", (req, res) => {
     list = list.filter((t) => t.tx_date === todayStr);
   }
 
-  const income = list.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0);
-  const expense = list.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0);
-  res.json({ transactions: list, totals: { income, expense } });
+  const procs = storage.getProcedures();
+  const visits = storage.getVisits();
+  const appts = storage.getAppointments();
+
+  // Bajaruvchi shifokor ma'lumotini to'ldirish (agar saqlanmagan bo'lsa bemor muolajalari/tashriflaridan aniqlash)
+  const enriched = list.map((t) => {
+    if (t.staff_name) return t;
+    if (t.patient_id) {
+      const proc =
+        procs.find((p) => p.patient_id === t.patient_id && p.procedure_date === t.tx_date) ||
+        procs.find((p) => p.patient_id === t.patient_id);
+      if (proc) {
+        return {
+          ...t,
+          staff_id: proc.staff_id || proc.initial_staff_id,
+          staff_name: proc.staff_name || proc.initial_staff_name,
+        };
+      }
+      const v = visits.find((x) => x.patient_id === t.patient_id);
+      if (v) {
+        return {
+          ...t,
+          staff_id: v.staff_id || v.initial_staff_id,
+          staff_name: v.staff_name || v.initial_staff_name,
+        };
+      }
+      const a = appts.find((x) => x.patient_name === t.patient_name && x.date === t.tx_date);
+      if (a) {
+        return {
+          ...t,
+          staff_id: a.staff_id,
+          staff_name: a.staff_name,
+        };
+      }
+    }
+    return t;
+  });
+
+  const income = enriched.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0);
+  const expense = enriched.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0);
+  res.json({ transactions: enriched, totals: { income, expense } });
 });
 
 app.post("/api/transactions", (req, res) => {
   const b = req.body;
   const p = b.patient_id ? storage.getPatients().find((x) => x.id === parseInt(b.patient_id, 10)) : null;
+  const staff = b.staff_id ? storage.getStaff().find((s) => s.id === parseInt(b.staff_id, 10)) : null;
+
+  // Agar shifokor ko'rsatilmagan bo'lsa va bemor bo'lsa, oxirgi muolajadan topish
+  let autoStaffId = b.staff_id ? parseInt(b.staff_id, 10) : null;
+  let autoStaffName = staff ? staff.full_name : (b.staff_name || undefined);
+  if (!autoStaffName && b.patient_id) {
+    const lastProc = storage.getProcedures().find((proc) => proc.patient_id === parseInt(b.patient_id, 10));
+    if (lastProc) {
+      autoStaffId = lastProc.staff_id || lastProc.initial_staff_id || null;
+      autoStaffName = lastProc.staff_name || lastProc.initial_staff_name || undefined;
+    }
+  }
+
   const newT = storage.addTransaction({
     type: b.type === "expense" ? "expense" : "income",
     amount: Number(b.amount || 0),
     category: b.category || (b.type === "expense" ? "material" : "payment"),
     method: b.method || "cash",
     patient_id: b.patient_id ? parseInt(b.patient_id, 10) : null,
-    patient_name: p ? p.full_name : undefined,
+    patient_name: p ? p.full_name : (b.patient_name || undefined),
+    staff_id: autoStaffId,
+    staff_name: autoStaffName,
     comment: b.comment || "",
     tx_date: b.tx_date || todayStr,
   });
@@ -1244,6 +1341,11 @@ app.put("/api/transactions/:id", (req, res) => {
     patch.patient_id = b.patient_id ? parseInt(b.patient_id, 10) : null;
     patch.patient_name = p ? p.full_name : undefined;
   }
+  if (b.staff_id !== undefined) {
+    patch.staff_id = b.staff_id ? parseInt(b.staff_id, 10) : null;
+    const staff = b.staff_id ? storage.getStaff().find((s) => s.id === parseInt(b.staff_id, 10)) : null;
+    patch.staff_name = staff ? staff.full_name : (b.staff_name || undefined);
+  }
 
   const updated = storage.updateTransaction(id, patch);
   if (!updated) return res.status(404).json({ error: "Tranzaksiya topilmadi" });
@@ -1262,6 +1364,25 @@ app.delete("/api/transactions/:id", (req, res) => {
     broadcastSSE("storage:updated", { counts: storage.getCloudStatus() });
   }
   res.json({ ok });
+});
+
+// Muolaja ulushini o'zgartirish (agar 2 kishi bajargan bo'lsa: 50/50, 60/40, 70/30 yoki ixtiyoriy)
+app.put("/api/procedures/:id/split", (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const { split_ratio, initial_staff_id, initial_staff_name, final_staff_id, final_staff_name } = req.body;
+  const patch: Partial<Procedure> = {};
+  if (split_ratio !== undefined) patch.split_ratio = Number(split_ratio);
+  if (initial_staff_id !== undefined) patch.initial_staff_id = initial_staff_id ? Number(initial_staff_id) : null;
+  if (initial_staff_name !== undefined) patch.initial_staff_name = initial_staff_name;
+  if (final_staff_id !== undefined) patch.final_staff_id = final_staff_id ? Number(final_staff_id) : null;
+  if (final_staff_name !== undefined) patch.final_staff_name = final_staff_name;
+
+  const updated = storage.updateProcedure(id, patch);
+  if (!updated) return res.status(404).json({ error: "Muolaja topilmadi" });
+  broadcastSSE("procedure:updated", updated);
+  broadcastSSE("clinic:sse", { type: "procedure:updated", procedure: updated });
+  broadcastSSE("storage:updated", { counts: storage.getCloudStatus() });
+  res.json({ ok: true, procedure: updated });
 });
 
 // 9. Reports
@@ -1290,18 +1411,57 @@ app.get("/api/reports/doctor-stats", (req, res) => {
   const from = req.query.from ? String(req.query.from) : "2026-01-01";
   const to = req.query.to ? String(req.query.to) : "2026-12-31";
 
-  const doctors = storage.getStaff().filter((s) => s.position === "doctor");
+  const doctors = storage.getStaff().filter((s) => s.position === "doctor" || s.position === "assistant");
+  const procs = storage.getProcedures().filter((p) => p.procedure_date >= from && p.procedure_date <= to);
+  const appts = storage.getAppointments().filter((a) => a.date >= from && a.date <= to);
+
   const stats = doctors.map((doc) => {
-    const docProcs = storage.getProcedures().filter((p) => p.staff_id === doc.id && p.procedure_date >= from && p.procedure_date <= to);
-    const docAppts = storage.getAppointments().filter((a) => a.staff_id === doc.id && a.date >= from && a.date <= to);
+    let procCount = 0;
+    let procSum = 0;
+    let jointCount = 0;
+    let soloCount = 0;
+
+    procs.forEach((p) => {
+      const isPrimary = p.staff_id === doc.id || p.initial_staff_id === doc.id;
+      const isFinal = p.final_staff_id === doc.id && p.final_staff_id !== (p.initial_staff_id || p.staff_id);
+
+      if (isPrimary && isFinal) {
+        // Ayni bir shifokor 2 martalab tanlangan bo'lsa
+        procCount += 1;
+        soloCount += 1;
+        procSum += p.price;
+      } else if (isPrimary && p.final_staff_id && p.final_staff_id !== (p.initial_staff_id || p.staff_id)) {
+        // 2 kishi bajargan: boshlovchi shifokor ulushi
+        const ratio = p.split_ratio !== undefined ? p.split_ratio : 50;
+        procCount += 1;
+        jointCount += 1;
+        procSum += Math.round((p.price * ratio) / 100);
+      } else if (isFinal) {
+        // 2 kishi bajargan: yakunlovchi / yordamchi shifokor ulushi
+        const ratio = p.split_ratio !== undefined ? p.split_ratio : 50;
+        const assistRatio = 100 - ratio;
+        procCount += 1;
+        jointCount += 1;
+        procSum += Math.round((p.price * assistRatio) / 100);
+      } else if (isPrimary) {
+        // 1 kishi bajargan yagona ish
+        procCount += 1;
+        soloCount += 1;
+        procSum += p.price;
+      }
+    });
+
+    const docAppts = appts.filter((a) => a.staff_id === doc.id);
     const completed = docAppts.filter((a) => a.status === "completed").length;
 
     return {
       staff_id: doc.id,
       full_name: doc.full_name,
       position: doc.position,
-      procedures_count: docProcs.length,
-      procedures_total: docProcs.reduce((s, p) => s + p.price, 0),
+      procedures_count: procCount,
+      procedures_total: procSum,
+      joint_procedures_count: jointCount,
+      solo_procedures_count: soloCount,
       appointments_total: docAppts.length,
       appointments_completed: completed,
     };
@@ -1317,17 +1477,26 @@ app.get("/api/reports/excel", async (req, res) => {
 
   try {
     if (kind === "finance") {
+      const procs = storage.getProcedures();
       const txRows = storage.getTransactions()
         .filter((t) => t.tx_date >= from && t.tx_date <= to)
-        .map((t) => ({
-          tx_date: t.tx_date,
-          type: t.type,
-          category: t.category,
-          amount: t.amount,
-          method: t.method,
-          patient: t.patient_name || "",
-          comment: t.comment || "",
-        }));
+        .map((t) => {
+          let doctor = t.staff_name;
+          if (!doctor && t.patient_id) {
+            const p = procs.find((proc) => proc.patient_id === t.patient_id);
+            if (p) doctor = p.staff_name || p.initial_staff_name;
+          }
+          return {
+            tx_date: t.tx_date,
+            type: t.type,
+            category: t.category,
+            amount: t.amount,
+            method: t.method,
+            patient: t.patient_name || "",
+            doctor: doctor || "—",
+            comment: t.comment || "",
+          };
+        });
 
       const wb = createFinanceExcel(txRows, from, to);
       const buffer = await wb.xlsx.writeBuffer();
@@ -1336,16 +1505,39 @@ app.get("/api/reports/excel", async (req, res) => {
       res.setHeader("Content-Disposition", `attachment; filename="Moliya_${from}_${to}.xlsx"`);
       return res.send(buffer);
     } else {
-      const doctors = storage.getStaff().filter((s) => s.position === "doctor");
+      const doctors = storage.getStaff().filter((s) => s.position === "doctor" || s.position === "assistant");
+      const procs = storage.getProcedures().filter((p) => p.procedure_date >= from && p.procedure_date <= to);
+
       const rows = doctors.map((doc) => {
-        const docProcs = storage.getProcedures().filter(
-          (p) => p.staff_id === doc.id && p.procedure_date >= from && p.procedure_date <= to
-        );
+        let docTotal = 0;
+        let docCount = 0;
+
+        procs.forEach((p) => {
+          const isPrimary = p.staff_id === doc.id || p.initial_staff_id === doc.id;
+          const isFinal = p.final_staff_id === doc.id && p.final_staff_id !== (p.initial_staff_id || p.staff_id);
+
+          if (isPrimary && isFinal) {
+            docCount += 1;
+            docTotal += p.price;
+          } else if (isPrimary && p.final_staff_id && p.final_staff_id !== (p.initial_staff_id || p.staff_id)) {
+            const ratio = p.split_ratio !== undefined ? p.split_ratio : 50;
+            docCount += 1;
+            docTotal += Math.round((p.price * ratio) / 100);
+          } else if (isFinal) {
+            const ratio = p.split_ratio !== undefined ? p.split_ratio : 50;
+            docCount += 1;
+            docTotal += Math.round((p.price * (100 - ratio)) / 100);
+          } else if (isPrimary) {
+            docCount += 1;
+            docTotal += p.price;
+          }
+        });
+
         return {
           full_name: doc.full_name,
           position: doc.position,
-          ishlar_soni: docProcs.length,
-          umumiy_summa: docProcs.reduce((s, p) => s + p.price, 0),
+          ishlar_soni: docCount,
+          umumiy_summa: docTotal,
         };
       });
 
