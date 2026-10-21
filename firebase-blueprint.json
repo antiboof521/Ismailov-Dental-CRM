@@ -1,0 +1,114 @@
+{
+  "entities": {
+    "Patient": {
+      "title": "Patient",
+      "description": "Patient record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "number" },
+        "full_name": { "type": "string" },
+        "phone": { "type": "string" },
+        "birth_date": { "type": "string" },
+        "gender": { "type": "string" },
+        "address": { "type": "string" },
+        "allergies": { "type": "string" },
+        "notes": { "type": "string" },
+        "source": { "type": "string" },
+        "telegram_id": { "type": "string" },
+        "lang": { "type": "string" },
+        "created_at": { "type": "string" }
+      },
+      "required": ["full_name", "phone"]
+    },
+    "Appointment": {
+      "title": "Appointment",
+      "description": "Dental appointment",
+      "type": "object",
+      "properties": {
+        "id": { "type": "number" },
+        "patient_id": { "type": "number" },
+        "patient_name": { "type": "string" },
+        "staff_id": { "type": "number" },
+        "staff_name": { "type": "string" },
+        "scheduled_at": { "type": "string" },
+        "date": { "type": "string" },
+        "time": { "type": "string" },
+        "duration_min": { "type": "number" },
+        "complaint": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["date", "time", "patient_name"]
+    },
+    "Staff": {
+      "title": "Staff",
+      "description": "Clinic doctors and staff",
+      "type": "object",
+      "properties": {
+        "id": { "type": "number" },
+        "full_name": { "type": "string" },
+        "position": { "type": "string" },
+        "phone": { "type": "string" },
+        "active": { "type": "boolean" }
+      },
+      "required": ["full_name", "position"]
+    },
+    "Service": {
+      "title": "Service",
+      "description": "Dental clinic services",
+      "type": "object",
+      "properties": {
+        "id": { "type": "number" },
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "price": { "type": "number" },
+        "active": { "type": "boolean" }
+      },
+      "required": ["name", "price"]
+    },
+    "DentalChart": {
+      "title": "DentalChart",
+      "description": "Dental teeth chart for patient",
+      "type": "object",
+      "properties": {
+        "patient_id": { "type": "number" },
+        "teeth": { "type": "object" },
+        "updated_at": { "type": "string" }
+      }
+    },
+    "ClinicSetting": {
+      "title": "ClinicSetting",
+      "description": "Clinic general settings and full persistent state",
+      "type": "object",
+      "properties": {
+        "updated_at": { "type": "string" },
+        "data": { "type": "object" }
+      }
+    }
+  },
+  "firestore": {
+    "/patients/{patientId}": {
+      "schema": "Patient",
+      "description": "Patient records"
+    },
+    "/appointments/{appointmentId}": {
+      "schema": "Appointment",
+      "description": "Scheduled appointments"
+    },
+    "/staff/{staffId}": {
+      "schema": "Staff",
+      "description": "Clinic staff and doctors"
+    },
+    "/services/{serviceId}": {
+      "schema": "Service",
+      "description": "Clinic dental services"
+    },
+    "/dental_charts/{chartId}": {
+      "schema": "DentalChart",
+      "description": "Dental charts"
+    },
+    "/clinic_backup/{docId}": {
+      "schema": "ClinicSetting",
+      "description": "Cloud persistent backup and clinic data"
+    }
+  }
+}

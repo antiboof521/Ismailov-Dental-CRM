@@ -1,0 +1,33 @@
+services:
+  # 1. 24/7 Bepul Web Service (Sayt + Telegram Bot birgalikda)
+  - type: web
+    name: dental-clinic-crm
+    env: node
+    plan: free
+    region: frankfurt
+    buildCommand: npm install --legacy-peer-deps && npm run build
+    startCommand: npm run start
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: TZ
+        value: Asia/Tashkent
+      - key: CLINIC_NAME
+        value: "Stomatologiya Klinikasi"
+      - key: CLINIC_PHONE
+        value: "+998 (71) 200-00-00"
+
+  # 2. 24/7 Bepul Faqat Telegram Bot Runner (Agar faqat botni alohida yurgizish kerak bo'lsa)
+  - type: worker
+    name: dental-bot-24-7
+    env: node
+    plan: free
+    region: frankfurt
+    buildCommand: npm install
+    startCommand: npm run bot
+    autoDeploy: true
+    envVars:
+      - key: TZ
+        value: Asia/Tashkent

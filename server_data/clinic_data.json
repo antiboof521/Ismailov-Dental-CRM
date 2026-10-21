@@ -1,0 +1,532 @@
+{
+  "users": [
+    {
+      "password": "admin123",
+      "username": "admin",
+      "id": 1,
+      "full_name": "Dr. Rustam Karimov (Bosh shifokor)",
+      "active": true,
+      "role": "admin"
+    },
+    {
+      "username": "doctor",
+      "password": "doctor123",
+      "role": "doctor",
+      "active": true,
+      "full_name": "Dr. Nilufar Saidova (Ortodont)",
+      "id": 2
+    },
+    {
+      "full_name": "Malika Rahimova (Buxgalter)",
+      "active": true,
+      "role": "accountant",
+      "password": "acc123",
+      "username": "accountant",
+      "id": 3
+    },
+    {
+      "username": "antiboof521@gmail.com",
+      "id": 1,
+      "active": true,
+      "full_name": "Muhammadjon Ismailov",
+      "role": "doctor"
+    }
+  ],
+  "staff": [
+    {
+      "salary_pct": 35,
+      "active": true,
+      "full_name": "Dr. Rustam Karimov",
+      "id": 1,
+      "position": "doctor",
+      "phone": "+998 90 123 45 67",
+      "salary_fixed": 4000000
+    },
+    {
+      "phone": "+998 93 234 56 78",
+      "full_name": "Dr. Nilufar Saidova",
+      "salary_pct": 40,
+      "salary_fixed": 3000000,
+      "active": true,
+      "id": 2,
+      "position": "doctor"
+    },
+    {
+      "phone": "+998 97 345 67 89",
+      "full_name": "Dr. Aziz Alimov",
+      "salary_pct": 30,
+      "active": true,
+      "position": "doctor",
+      "salary_fixed": 3500000,
+      "id": 3
+    },
+    {
+      "active": true,
+      "salary_fixed": 3200000,
+      "phone": "+998 91 456 78 90",
+      "salary_pct": 0,
+      "position": "assistant",
+      "id": 4,
+      "full_name": "Shahnoza Yusupova"
+    }
+  ],
+  "services": [
+    {
+      "name": "Konsultatsiya va ko'rik",
+      "price": 50000,
+      "active": true,
+      "category": "Tashxis",
+      "id": 1
+    },
+    {
+      "id": 2,
+      "name": "Fotopolimer plomba qo'yish (Gradia)",
+      "category": "Terapevtik",
+      "active": true,
+      "price": 320000
+    },
+    {
+      "active": true,
+      "name": "Kanal davolash (Endodontiya 1 kanal)",
+      "category": "Terapevtik",
+      "id": 3,
+      "price": 180000
+    },
+    {
+      "active": true,
+      "name": "Ultratovushli tish tozalash (Air-Flow)",
+      "category": "Gigiyena",
+      "id": 4,
+      "price": 250000
+    },
+    {
+      "name": "Keramik metall tojburchak (Koronka)",
+      "id": 5,
+      "category": "Ortopediya",
+      "active": true,
+      "price": 650000
+    },
+    {
+      "name": "Tsirkoniy tojburchak (Zirconia)",
+      "category": "Ortopediya",
+      "active": true,
+      "id": 6,
+      "price": 1200000
+    },
+    {
+      "price": 150000,
+      "id": 7,
+      "category": "Jarrohlik",
+      "name": "Tish sug'urish (Oddiy)",
+      "active": true
+    },
+    {
+      "active": true,
+      "id": 8,
+      "name": "Aql tishini murakkab sug'urish",
+      "category": "Jarrohlik",
+      "price": 400000
+    },
+    {
+      "category": "Implantatsiya",
+      "price": 3800000,
+      "id": 9,
+      "active": true,
+      "name": "Dental implant o'rnatish (Osstem)"
+    },
+    {
+      "id": 10,
+      "price": 3500000,
+      "category": "Ortodontiya",
+      "active": true,
+      "name": "Metall breket tizimi (1 jag')"
+    }
+  ],
+  "patients": [
+    {
+      "created_at": "2026-09-27",
+      "source": "telegram",
+      "gender": "male",
+      "full_name": "ismailov m",
+      "notes": "AI shikoyat: Birlamchi ko'rik, 30 min",
+      "address": "Xorazm viloyati, Qo'shko'pir tumani, Hayrobod qishlog'i",
+      "id": 6,
+      "lang": "uz",
+      "telegram_id": "667286884",
+      "phone": "+998971000622"
+    },
+    {
+      "phone": "+998 90 987 65 43",
+      "id": 1,
+      "full_name": "Alisher Qodirov",
+      "gender": "male",
+      "source": "clinic",
+      "notes": "Oldingi tishida sezuvchanlik bor",
+      "address": "Toshkent sh., Chilonzor 9-mavze",
+      "allergies": "Penitsillin",
+      "birth_date": "1988-04-12",
+      "created_at": "2026-08-10",
+      "connect_code": "252163"
+    },
+    {
+      "birth_date": "1995-11-23",
+      "source": "telegram",
+      "created_at": "2026-08-15",
+      "gender": "female",
+      "id": 2,
+      "notes": "Breket davolash jarayonida",
+      "full_name": "Gulbahor Xamidova",
+      "address": "Toshkent sh., Yunusobod 4",
+      "allergies": "Yo'q",
+      "telegram_id": "87654321",
+      "phone": "+998 97 765 43 21"
+    },
+    {
+      "created_at": "2026-09-01",
+      "phone": "+998 93 321 09 87",
+      "birth_date": "1982-02-18",
+      "allergies": "Lidokain",
+      "full_name": "Bobur Mirzayev",
+      "notes": "Implantatsiya nazorati",
+      "gender": "male",
+      "source": "clinic",
+      "id": 3,
+      "address": "Toshkent sh., Mirzo Ulug'bek"
+    },
+    {
+      "phone": "+998 91 112 23 34",
+      "id": 4,
+      "telegram_id": "12345678",
+      "birth_date": "2001-07-30",
+      "full_name": "Munira Zokirova",
+      "address": "Toshkent sh., Shayxontohur",
+      "created_at": "2026-09-12",
+      "notes": "Tish tozalash va oqartirish",
+      "allergies": "Yo'q",
+      "gender": "female",
+      "source": "telegram"
+    },
+    {
+      "address": "Toshkent vil., Zangiota",
+      "source": "clinic",
+      "gender": "male",
+      "id": 5,
+      "allergies": "Yo'q",
+      "notes": "Kariyes 2 ta tishda",
+      "full_name": "Jasur Bekmirzayev",
+      "phone": "+998 94 445 56 67",
+      "created_at": "2026-09-15",
+      "birth_date": "1991-09-05"
+    }
+  ],
+  "appointments": [
+    {
+      "patient_id": 2,
+      "status": "arrived",
+      "date": "2026-09-27",
+      "duration_min": 30,
+      "scheduled_at": "2026-09-27T11:00:00",
+      "id": 2,
+      "complaint": "Breket liga tortish",
+      "patient_name": "Gulbahor Xamidova",
+      "staff_name": "Dr. Nilufar Saidova",
+      "time": "11:00",
+      "staff_id": 2
+    },
+    {
+      "patient_id": 3,
+      "status": "scheduled",
+      "id": 3,
+      "date": "2026-09-27",
+      "patient_name": "Bobur Mirzayev",
+      "complaint": "Implant tekshiruvi",
+      "staff_name": "Dr. Rustam Karimov",
+      "scheduled_at": "2026-09-27T14:00:00",
+      "duration_min": 60,
+      "staff_id": 1,
+      "time": "14:00"
+    },
+    {
+      "scheduled_at": "2026-09-27T16:30:00",
+      "duration_min": 40,
+      "staff_id": 3,
+      "date": "2026-09-27",
+      "patient_id": 4,
+      "id": 4,
+      "status": "scheduled",
+      "patient_name": "Munira Zokirova",
+      "time": "16:30",
+      "complaint": "Tish toshlarini tozalash",
+      "staff_name": "Dr. Aziz Alimov"
+    },
+    {
+      "staff_name": "Dr. Nilufar Saidova",
+      "complaint": "",
+      "staff_id": 2,
+      "scheduled_at": "2026-09-28T09:22:00",
+      "date": "2026-09-28",
+      "duration_min": 30,
+      "status": "cancelled",
+      "patient_id": 6,
+      "patient_name": "ismailov m",
+      "time": "09:22",
+      "id": 6
+    }
+  ],
+  "procedures": [
+    {
+      "tooth": "16",
+      "service_name": "Fotopolimer plomba qo'yish (Gradia)",
+      "procedure_date": "2026-09-27",
+      "id": 1,
+      "patient_id": 1,
+      "service_id": 2,
+      "price": 320000,
+      "staff_id": 1,
+      "staff_name": "Dr. Rustam Karimov"
+    },
+    {
+      "price": 250000,
+      "service_id": 4,
+      "procedure_date": "2026-09-27",
+      "staff_name": "Dr. Rustam Karimov",
+      "staff_id": 1,
+      "id": 2,
+      "tooth": "All",
+      "service_name": "Ultratovushli tish tozalash (Air-Flow)",
+      "patient_id": 1
+    },
+    {
+      "service_id": 10,
+      "service_name": "Metall breket tizimi (1 jag')",
+      "staff_name": "Dr. Nilufar Saidova",
+      "price": 3500000,
+      "staff_id": 2,
+      "procedure_date": "2026-08-20",
+      "patient_id": 2,
+      "tooth": "Yuqori",
+      "id": 3
+    },
+    {
+      "price": 3800000,
+      "service_id": 9,
+      "procedure_date": "2026-09-02",
+      "staff_name": "Dr. Rustam Karimov",
+      "staff_id": 1,
+      "id": 4,
+      "tooth": "36",
+      "service_name": "Dental implant o'rnatish (Osstem)",
+      "patient_id": 3
+    }
+  ],
+  "transactions": [
+    {
+      "category": "payment",
+      "id": 1,
+      "type": "income",
+      "tx_date": "2026-09-27",
+      "patient_name": "Alisher Qodirov",
+      "patient_id": 1,
+      "comment": "Plomba va tish tozalash uchun to'lov",
+      "amount": 570000,
+      "method": "card"
+    },
+    {
+      "category": "payment",
+      "comment": "Breket uchun boshlang'ich to'lov",
+      "patient_name": "Gulbahor Xamidova",
+      "patient_id": 2,
+      "amount": 2000000,
+      "method": "cash",
+      "type": "income",
+      "tx_date": "2026-09-27",
+      "id": 2
+    },
+    {
+      "patient_id": null,
+      "comment": "Dentsply fotokompozit material xaridi",
+      "category": "material",
+      "type": "expense",
+      "amount": 450000,
+      "method": "transfer",
+      "id": 3,
+      "tx_date": "2026-09-27"
+    },
+    {
+      "type": "expense",
+      "method": "card",
+      "tx_date": "2026-09-27",
+      "amount": 150000,
+      "patient_id": null,
+      "category": "utility",
+      "id": 4,
+      "comment": "Klinika tozalik va antiseptik vositalari"
+    },
+    {
+      "tx_date": "2026-09-02",
+      "amount": 3800000,
+      "method": "transfer",
+      "category": "payment",
+      "patient_name": "Bobur Mirzayev",
+      "comment": "Implant to'liq to'lovi",
+      "type": "income",
+      "id": 5,
+      "patient_id": 3
+    }
+  ],
+  "visits": [
+    {
+      "recommendations": "Issiq-sovuqdan 2 soat saqlanish, gigiyenaga rioya qilish",
+      "staff_name": "Dr. Rustam Karimov",
+      "staff_id": 1,
+      "visit_date": "2026-09-27",
+      "complaint": "16-tishda karies va og'riq",
+      "patient_id": 1,
+      "diagnosis": "O'rta karies (Caries media)",
+      "id": 1,
+      "patient_name": "Alisher Qodirov"
+    },
+    {
+      "id": 2,
+      "visit_date": "2026-08-20",
+      "patient_name": "Gulbahor Xamidova",
+      "staff_id": 2,
+      "staff_name": "Dr. Nilufar Saidova",
+      "diagnosis": "I sinf tish anomaliyasi",
+      "complaint": "Tishlarning egriligi",
+      "patient_id": 2,
+      "recommendations": "Qattiq ovqatlar yemash, maxsus cho'tka bilan tozalash"
+    }
+  ],
+  "reminders": [
+    {
+      "id": 1,
+      "reason": "Implantatsiya bo'yicha 1 oylik nazorat ko'rigi",
+      "patient_name": "Bobur Mirzayev",
+      "patient_id": 3,
+      "phone": "+998 93 321 09 87",
+      "due_date": "2026-09-29",
+      "status": "pending"
+    },
+    {
+      "patient_id": 2,
+      "phone": "+998 97 765 43 21",
+      "patient_name": "Gulbahor Xamidova",
+      "status": "sent",
+      "id": 2,
+      "due_date": "2026-09-27",
+      "reason": "Breket qabuliga kelish vaqti eslatmasi",
+      "telegram_id": "87654321"
+    },
+    {
+      "status": "done",
+      "patient_name": "Alisher Qodirov",
+      "due_date": "2026-09-26",
+      "patient_id": 1,
+      "phone": "+998 90 987 65 43",
+      "id": 3,
+      "reason": "Plombadan keyingi holatni tekshirish"
+    }
+  ],
+  "complaints": [
+    {
+      "telegram_id": "87654321",
+      "created_at": "2026-09-27T08:15:00",
+      "id": 1,
+      "status": "open",
+      "patient_name": "Gulbahor Xamidova",
+      "message": "Salom, kecha qo'yilgan breket sal tilimga tegib qirayapti, maxsus mum (vosk) olsa bo'ladimi?"
+    },
+    {
+      "id": 2,
+      "status": "closed",
+      "telegram_id": "99887766",
+      "patient_name": "Nodir Karimov",
+      "reply_text": "Va alaykum assalom! Shanba kuni soat 14:00 ga yozib qo'ydik, kutamiz.",
+      "message": "Assalomu alaykum, shifokor qabuliga navbatga yozilmoqchi edim, shanba kuni bo'shmi?",
+      "created_at": "2026-09-18T16:20:00"
+    }
+  ],
+  "dentalCharts": {
+    "1": {
+      "15": {
+        "number": 15,
+        "note": "Boshlang'ich karies, kuzatuv",
+        "status": "caries",
+        "updated_at": "2026-09-27"
+      },
+      "16": {
+        "number": 16,
+        "note": "Fotopolimer plomba (Gradia)",
+        "status": "filling",
+        "updated_at": "2026-09-27"
+      },
+      "26": {
+        "number": 26,
+        "status": "healthy",
+        "note": "Sog'lom",
+        "updated_at": "2026-09-27"
+      }
+    },
+    "2": {
+      "11": {
+        "note": "Breket tizimi o'rnatilgan",
+        "status": "prosthetic",
+        "updated_at": "2026-08-20",
+        "number": 11
+      },
+      "21": {
+        "status": "prosthetic",
+        "number": 21,
+        "updated_at": "2026-08-20",
+        "note": "Breket tizimi o'rnatilgan"
+      }
+    },
+    "3": {
+      "11": {
+        "status": "pulpitis",
+        "note": "Ildiz kanali davolangan",
+        "number": 11,
+        "updated_at": "2026-06-01"
+      },
+      "26": {
+        "status": "missing",
+        "note": "Olingan tish",
+        "updated_at": "2026-07-10",
+        "number": 26
+      },
+      "36": {
+        "updated_at": "2026-09-02",
+        "status": "implant",
+        "number": 36,
+        "note": "Osstem implant 4.0x10mm o'rnatilgan"
+      },
+      "46": {
+        "updated_at": "2026-08-15",
+        "status": "crown",
+        "note": "Keramik metall tojburchak",
+        "number": 46
+      }
+    }
+  },
+  "dentalImages": [],
+  "botSessions": {
+    "667286884": {
+      "data": {
+        "duration_min": 45,
+        "complaint": "Ortopedik protezlash va tish tojlari (koronka/vinir)",
+        "triageHistory": []
+      },
+      "lang": "uz",
+      "step": "appt:category"
+    },
+    "test_123": {
+      "data": {
+        "test": true
+      },
+      "lang": "uz",
+      "step": "idle"
+    }
+  },
+  "lastUpdated": "2026-09-27T23:49:32.555Z"
+}

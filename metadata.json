@@ -1,0 +1,6 @@
+{
+  "name": "Dental Clinic Admin",
+  "description": "Stomatologiya klinikasi boshqaruv tizimi (CRM) - bemorlar, navbatlar, moliya va hisobotlar",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
