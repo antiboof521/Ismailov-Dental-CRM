@@ -110,3 +110,69 @@ export function doctorStats(rows: DoctorStatsRow[], from: string, to: string): E
 
   return wb;
 }
+
+export interface CompletedApptExcelRow {
+  date: string;
+  time: string;
+  patient: string;
+  doctor: string;
+  complaint?: string;
+  procedures?: string;
+  procedures_cost: number;
+  paid_amount: number;
+  payment_status: string;
+}
+
+/** Yakunlangan qabullar va to'lovlar varag'i */
+export function completedApptsExcel(rows: CompletedApptExcelRow[], from: string, to: string): ExcelJS.Workbook {
+  const wb = new ExcelJS.Workbook();
+  wb.creator = "Dental Clinic";
+  const ws = wb.addWorksheet("Yakunlangan qabullar");
+
+  ws.columns = [
+    { header: "Sana", key: "date", width: 12 },
+    { header: "Vaqt", key: "time", width: 10 },
+    { header: "Bemor", key: "patient", width: 28 },
+    { header: "Shifokor", key: "doctor", width: 26 },
+    { header: "Shikoyat / Tashxis", key: "complaint", width: 28 },
+    { header: "Bajarilgan muolajalar", key: "procedures", width: 32 },
+    { header: "Muolaja summasi (so'm)", key: "cost", width: 18 },
+    { header: "To'langan summa (so'm)", key: "paid", width: 18 },
+    { header: "To'lov holati", key: "status", width: 14 },
+  ];
+  styleHeader(ws);
+
+  let totalCost = 0;
+  let totalPaid = 0;
+  for (const r of rows) {
+    const cost = Number(r.procedures_cost || 0);
+    const paid = Number(r.paid_amount || 0);
+    totalCost += cost;
+    totalPaid += paid;
+    ws.addRow({
+      date: r.date,
+      time: r.time,
+      patient: r.patient,
+      doctor: r.doctor,
+      complaint: r.complaint || "—",
+      procedures: r.procedures || "—",
+      cost,
+      paid,
+      status: r.payment_status,
+    });
+  }
+
+  ws.addRow({});
+  const totalRow = ws.addRow({
+    patient: "JAMI",
+    cost: totalCost,
+    paid: totalPaid,
+  });
+  totalRow.font = { bold: true };
+
+  const note = ws.addRow({});
+  note.getCell("A").value = `Davr: ${from} → ${to}`;
+  note.font = { italic: true };
+
+  return wb;
+}

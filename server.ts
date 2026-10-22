@@ -21,7 +21,11 @@ import {
   BotAppointment,
   BotStaff,
 } from "./server/bot.js";
-import { finance as createFinanceExcel, doctorStats as createDoctorStatsExcel } from "./server/utils/excel.js";
+import {
+  finance as createFinanceExcel,
+  doctorStats as createDoctorStatsExcel,
+  completedApptsExcel as createCompletedApptsExcel,
+} from "./server/utils/excel.js";
 import { PORT, CLINIC_NAME, CLINIC_PHONE, CLINIC_TG, TZ, DB_MODE } from "./server/config.js";
 import { sseHandler, broadcast as broadcastSSE } from "./server/events.js";
 import { startCron, triggerManualCheck } from "./server/cron.js";
@@ -56,7 +60,11 @@ app.use(cors());
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
-const todayStr = dayjs().format("YYYY-MM-DD");
+// Dinamik O'zbekiston (UTC+5) sanasi
+export function getTodayDate(): string {
+  return dayjs().utcOffset(5).format("YYYY-MM-DD");
+}
+const todayStr = getTodayDate();
 
 // ── TELEGRAM WEBHOOK ROUTE (24/7 uzluksiz ishlash) ──
 app.post("/api/telegram/webhook", (req, res) => {
@@ -447,23 +455,68 @@ app.delete("/api/users/:id", (req, res) => {
 
 // 2. Dashboard
 app.get("/api/dashboard", (req, res) => {
-  const todayAppts = storage.getAppointments().filter((a) => a.date === todayStr);
-  const todayTx = storage.getTransactions().filter((t) => t.tx_date === todayStr);
-  const income = todayTx.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0);
-  const expense = todayTx.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0);
+  const clientDate = req.query.date ? String(req.query.date) : getTodayDate();
+
+  const allAppts = storage.getAppointments();
+  const allTx = storage.getTransactions();
+  const allProcs = storage.getProcedures();
+
+  // Bugungi navbatlar va qabullar
+  const todayAppts = allAppts.filter((a) => (a.date || a.scheduled_at || "").slice(0, 10) === clientDate);
+
+  // Bugungi to'lovlar (Kirim) va xarajatlar (Chiqim)
+  const todayTx = allTx.filter((t) => (t.tx_date || "").slice(0, 10) === clientDate);
+  const income = todayTx.filter((t) => t.type === "income").reduce((s, t) => s + (Number(t.amount) || 0), 0);
+  const expense = todayTx.filter((t) => t.type === "expense").reduce((s, t) => s + (Number(t.amount) || 0), 0);
+
+  // Bugungi bajarilgan muolajalar summasi
+  const todayProcs = allProcs.filter((p) => (p.procedure_date || "").slice(0, 10) === clientDate);
+  const proceduresTotal = todayProcs.reduce((s, p) => s + (Number(p.price) || 0), 0);
+
+  // Bugungi yakunlangan qabullar soni
+  const completedTodayCount = todayAppts.filter((a) => String(a.status).toLowerCase() === "completed").length;
+
   const pendingReminders = storage.getReminders().filter((r) => r.status === "pending").length;
   const openComplaints = storage.getComplaints().filter((c) => c.status === "open").length;
   const pendingUserRequests = storage.getPendingUsers().length;
 
+  // Qabullarni to'liq ma'lumotlar bilan boyitish (muolajalar va qancha to'lov qilingani)
+  const enrichedUpcoming = todayAppts.map((a) => {
+    const aDate = (a.date || a.scheduled_at || "").slice(0, 10);
+    const relProcs = allProcs.filter(
+      (p) => p.patient_id === a.patient_id && (p.procedure_date || "").slice(0, 10) === aDate
+    );
+    const relTxs = allTx.filter(
+      (t) => t.patient_id === a.patient_id && t.type === "income" && (t.tx_date || "").slice(0, 10) === aDate
+    );
+    const procsCost = relProcs.reduce((s, p) => s + (Number(p.price) || 0), 0);
+    const paidSum = relTxs.reduce((s, t) => s + (Number(t.amount) || 0), 0);
+
+    return {
+      ...a,
+      procedures: relProcs,
+      procedures_cost: procsCost,
+      paid_amount: paidSum,
+      payment_method: relTxs.length > 0 ? relTxs.map((t) => t.method).join(", ") : undefined,
+      payment_status: paidSum >= procsCost && procsCost > 0 ? "paid" : paidSum > 0 ? "partial" : procsCost > 0 ? "unpaid" : (paidSum > 0 ? "paid" : "none"),
+    };
+  });
+
   res.json({
-    appointments: { total: todayAppts.length },
+    appointments: {
+      total: todayAppts.length,
+      completed: completedTodayCount,
+    },
     income,
     expense,
+    procedures_today: proceduresTotal,
+    completed_today: completedTodayCount,
     total_patients: storage.getPatients().length,
     pending_reminders: pendingReminders,
     open_complaints: openComplaints,
     pending_user_requests: pendingUserRequests,
-    upcoming: todayAppts.slice(0, 10),
+    upcoming: enrichedUpcoming,
+    date: clientDate,
   });
 });
 
@@ -806,22 +859,57 @@ app.post("/api/patients/:id/generate-connect-code", (req, res) => {
 // 4. Appointments
 app.get("/api/appointments", (req, res) => {
   let list = storage.getAppointments();
+  const procs = storage.getProcedures();
+  const txs = storage.getTransactions();
+  const today = getTodayDate();
+
   if (req.query.from && req.query.to) {
     const from = String(req.query.from);
     const to = String(req.query.to);
-    list = list.filter((a) => a.date >= from && a.date <= to);
+    list = list.filter((a) => {
+      const d = (a.date || a.scheduled_at || "").slice(0, 10);
+      return d >= from && d <= to;
+    });
   } else if (req.query.date) {
     const date = String(req.query.date);
-    list = list.filter((a) => a.date === date);
+    list = list.filter((a) => (a.date || a.scheduled_at || "").slice(0, 10) === date);
   } else if (req.query.all !== "true") {
-    list = list.filter((a) => a.date === todayStr);
+    list = list.filter((a) => (a.date || a.scheduled_at || "").slice(0, 10) === today);
+  }
+
+  if (req.query.status) {
+    const st = String(req.query.status).toLowerCase();
+    list = list.filter((a) => String(a.status).toLowerCase() === st);
   }
 
   if (req.query.staff_id) {
     const sid = parseInt(String(req.query.staff_id), 10);
-    list = list.filter((a) => a.staff_id === sid);
+    list = list.filter((a) => a.staff_id === sid || a.initial_staff_id === sid || a.final_staff_id === sid);
   }
-  res.json({ appointments: list });
+
+  // Har bir qabulni muolajalar va qancha to'lov qilingani bilan to'liq boyitish
+  const enriched = list.map((a) => {
+    const aDate = (a.date || a.scheduled_at || "").slice(0, 10);
+    const relProcs = procs.filter(
+      (p) => p.patient_id === a.patient_id && (p.procedure_date || "").slice(0, 10) === aDate
+    );
+    const relTxs = txs.filter(
+      (t) => t.patient_id === a.patient_id && t.type === "income" && (t.tx_date || "").slice(0, 10) === aDate
+    );
+    const procsCost = relProcs.reduce((s, p) => s + (Number(p.price) || 0), 0);
+    const paidSum = relTxs.reduce((s, t) => s + (Number(t.amount) || 0), 0);
+
+    return {
+      ...a,
+      procedures: relProcs,
+      procedures_cost: procsCost,
+      paid_amount: paidSum,
+      payment_method: relTxs.length > 0 ? relTxs.map((t) => t.method).join(", ") : undefined,
+      payment_status: paidSum >= procsCost && procsCost > 0 ? "paid" : paidSum > 0 ? "partial" : procsCost > 0 ? "unpaid" : (paidSum > 0 ? "paid" : "none"),
+    };
+  });
+
+  res.json({ appointments: enriched });
 });
 
 app.post("/api/appointments", (req, res) => {

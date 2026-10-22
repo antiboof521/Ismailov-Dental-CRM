@@ -369,9 +369,7 @@ class StorageEngine {
           if (cloudData.clinicSettings?.clinicPhone) {
             process.env.CLINIC_PHONE = cloudData.clinicSettings.clinicPhone;
           }
-          if (cloudData.clinicSettings?.clinicTg) {
-            process.env.CLINIC_TG = cloudData.clinicSettings.clinicTg;
-          }
+          this.healData(this.data);
           this.persist(this.data);
           return true;
         }
@@ -454,6 +452,9 @@ class StorageEngine {
             status: "approved",
           });
         }
+
+        // Shifokorlar, muolajalar va qabullar ma'lumotlaridagi bo'shliqlarni davolash (Data healing)
+        this.healData(resData);
         return resData;
       }
     } catch (e: any) {
@@ -461,8 +462,76 @@ class StorageEngine {
     }
 
     const init = getInitialData();
+    this.healData(init);
     this.persist(init);
     return init;
+  }
+
+  public healData(resData: StorageData): void {
+    if (!resData) return;
+    const staffList = resData.staff || [];
+    const findStaffByName = (name?: string) => {
+      if (!name) return null;
+      const clean = name.trim().toLowerCase().replace(/^(dr\.?|doktor)\s+/i, "");
+      return staffList.find((s) => {
+        const sClean = s.full_name.trim().toLowerCase().replace(/^(dr\.?|doktor)\s+/i, "");
+        return sClean === clean || sClean.includes(clean) || clean.includes(sClean);
+      });
+    };
+
+    // 1. Muolajalar ma'lumotlarini tuzatish
+    (resData.procedures || []).forEach((p) => {
+      if (!p.patient_name && p.patient_id) {
+        const pt = (resData.patients || []).find((x) => x.id === p.patient_id);
+        if (pt) p.patient_name = pt.full_name;
+      }
+      if ((p.staff_id === null || p.staff_id === undefined) && p.staff_name) {
+        const st = findStaffByName(p.staff_name);
+        if (st) p.staff_id = st.id;
+      }
+      if ((p.initial_staff_id === null || p.initial_staff_id === undefined) && p.initial_staff_name) {
+        const st = findStaffByName(p.initial_staff_name);
+        if (st) p.initial_staff_id = st.id;
+      }
+      if ((p.final_staff_id === null || p.final_staff_id === undefined) && p.final_staff_name) {
+        const st = findStaffByName(p.final_staff_name);
+        if (st) p.final_staff_id = st.id;
+      }
+    });
+
+    // 2. Qabullarni tuzatish
+    (resData.appointments || []).forEach((a) => {
+      if (!a.patient_name && a.patient_id) {
+        const pt = (resData.patients || []).find((x) => x.id === a.patient_id);
+        if (pt) a.patient_name = pt.full_name;
+      }
+      if ((a.staff_id === null || a.staff_id === undefined) && a.staff_name) {
+        const st = findStaffByName(a.staff_name);
+        if (st) a.staff_id = st.id;
+      }
+    });
+
+    // 3. Tranzaksiyalarni tuzatish (bemor va shifokor bog'lanishi)
+    (resData.transactions || []).forEach((t) => {
+      if (!t.patient_name && t.patient_id) {
+        const pt = (resData.patients || []).find((x) => x.id === t.patient_id);
+        if (pt) t.patient_name = pt.full_name;
+      }
+      if ((!t.staff_name || t.staff_id === null || t.staff_id === undefined) && t.patient_id) {
+        const relProc =
+          (resData.procedures || []).find(
+            (p) => p.patient_id === t.patient_id && (p.procedure_date || "").slice(0, 10) === (t.tx_date || "").slice(0, 10)
+          ) || (resData.procedures || []).find((p) => p.patient_id === t.patient_id);
+        if (relProc) {
+          if (!t.staff_name) t.staff_name = relProc.staff_name || relProc.initial_staff_name;
+          if (t.staff_id === null || t.staff_id === undefined) t.staff_id = relProc.staff_id || relProc.initial_staff_id || null;
+        }
+      }
+      if ((t.staff_id === null || t.staff_id === undefined) && t.staff_name) {
+        const st = findStaffByName(t.staff_name);
+        if (st) t.staff_id = st.id;
+      }
+    });
   }
 
   private persist(dataToSave: StorageData) {
@@ -929,7 +998,22 @@ class StorageEngine {
 
   public addProcedure(proc: Omit<Procedure, "id">): Procedure {
     const id = this.data.procedures.length ? Math.max(...this.data.procedures.map((x) => x.id)) + 1 : 1;
-    const newP: Procedure = { ...proc, id };
+    let patientName = proc.patient_name;
+    if (!patientName && proc.patient_id) {
+      const pt = this.data.patients.find((p) => p.id === proc.patient_id);
+      if (pt) patientName = pt.full_name;
+    }
+    let staffId = proc.staff_id;
+    if ((staffId === null || staffId === undefined) && proc.staff_name) {
+      const st = this.data.staff.find((s) => s.full_name.toLowerCase().includes(proc.staff_name.toLowerCase()) || proc.staff_name.toLowerCase().includes(s.full_name.toLowerCase()));
+      if (st) staffId = st.id;
+    }
+    const newP: Procedure = {
+      ...proc,
+      id,
+      patient_name: patientName || proc.patient_name,
+      staff_id: staffId !== undefined ? staffId : proc.staff_id,
+    };
     this.data.procedures.unshift(newP);
     this.save();
     return newP;
@@ -955,7 +1039,31 @@ class StorageEngine {
 
   public addTransaction(tx: Omit<Transaction, "id">): Transaction {
     const id = this.data.transactions.length ? Math.max(...this.data.transactions.map((x) => x.id)) + 1 : 1;
-    const newTx: Transaction = { ...tx, id };
+    let patientName = tx.patient_name;
+    if (!patientName && tx.patient_id) {
+      const pt = this.data.patients.find((p) => p.id === tx.patient_id);
+      if (pt) patientName = pt.full_name;
+    }
+    let staffId = tx.staff_id;
+    let staffName = tx.staff_name;
+    if ((!staffId || !staffName) && tx.patient_id) {
+      const relProc = this.data.procedures.find((p) => p.patient_id === tx.patient_id);
+      if (relProc) {
+        if (!staffId) staffId = relProc.staff_id || relProc.initial_staff_id || null;
+        if (!staffName) staffName = relProc.staff_name || relProc.initial_staff_name;
+      }
+    }
+    if ((staffId === null || staffId === undefined) && staffName) {
+      const st = this.data.staff.find((s) => s.full_name.toLowerCase().includes(staffName!.toLowerCase()) || staffName!.toLowerCase().includes(s.full_name.toLowerCase()));
+      if (st) staffId = st.id;
+    }
+    const newTx: Transaction = {
+      ...tx,
+      id,
+      patient_name: patientName,
+      staff_id: staffId !== undefined ? staffId : tx.staff_id,
+      staff_name: staffName || tx.staff_name,
+    };
     this.data.transactions.unshift(newTx);
     this.save();
     return newTx;
